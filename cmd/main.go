@@ -1,28 +1,39 @@
 package main
 
 import (
-	"log/slog"
-	"os"
+	"basic-backend-api/cmd/api"
+	"basic-backend-api/config"
+	"basic-backend-api/db"
+	"database/sql"
+	"log"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 func main() {
-	cfg := config{
-		addr: ":8080",
-		db:   dbConfig{},
-	}
-
-	api := application{
-		config: cfg,
-	}
-
-	//structured login
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	slog.SetDefault(logger)
-
-	h := api.mount()
-	err := api.run(h)
+	db, err := db.NewMySQLStorage(mysql.Config{
+		User:                 config.Envs.DBUser,
+		Passwd:               config.Envs.DBPassword,
+		Addr:                 config.Envs.DBAddress,
+		DBName:               config.Envs.DBName,
+		Net:                  "tcp",
+		AllowNativePasswords: true,
+		ParseTime:            true,
+	})
 	if err != nil {
-		slog.Error("server failed to start", "error", err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
+	initStorage(db)
+	server := api.NewAPIServer(":"+config.Envs.Port, db)
+	if err := server.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func initStorage(db *sql.DB) {
+	err := db.Ping()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Db connected successfully!!!")
 }
